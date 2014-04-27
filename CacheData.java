@@ -1,6 +1,5 @@
 import java.sql.Timestamp;
 
-
 public class CacheData {
 	
 	private String URL;
@@ -10,8 +9,9 @@ public class CacheData {
 	
 	public CacheData(String myURL){
 		URL = myURL;
-		tstamp.setTime(System.currentTimeMillis());
-		filename = "temp"+tempCount;
+		java.util.Date now = new java.util.Date();
+		tstamp = new Timestamp(now.getTime());
+		filename = "temp"+tempCount+".html";
 		tempCount++;
 	}
 	public CacheData(){
@@ -22,7 +22,8 @@ public class CacheData {
 	
 	//Sets timestamp to current time
 	public void updateTimestamp(){
-		tstamp.setTime(System.currentTimeMillis());
+		java.util.Date now = new java.util.Date();
+		tstamp.setTime(now.getTime());
 	}
 	
 	public String getURL(){
@@ -30,10 +31,6 @@ public class CacheData {
 	}
 	
 	public String getFilename(){
-		return filename+".html";
-	}
-	
-	public String getFolderName(){
 		return filename;
 	}
 	

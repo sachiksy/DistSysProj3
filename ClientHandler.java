@@ -1,11 +1,17 @@
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.net.MalformedURLException;
 import java.net.Socket;
+import java.net.URL;
 import java.net.UnknownHostException;
 
 class ClientHandler extends Thread
@@ -353,14 +359,13 @@ class ClientHandler extends Thread
 		for(int i=0; i<cache.length; i++){
 			//Found an empty spot in the cache
 			if ( cache[i] == null ){
-				cache[i]=new CacheData(cliURL);
 		 		updateCache(cliURL, i);
-		  		sendPage(cliURL);
+		  		sendPage(i);
 		  		return;
 			}
 			//Found the cached copy
 			else if ( cliURL.equals(cache[i].getURL()) ){
-				sendPage(cliURL);
+				sendPage(i);
 				numOfHits++;
 				cache[i].updateTimestamp();
 				return;
@@ -373,32 +378,50 @@ class ClientHandler extends Thread
 		//page not cached; replace lru page with requested one
 		File lruPage = new File(cache[lru].getFilename());
 		lruPage.delete();
-		cache[lru]=new CacheData(cliURL);
 		updateCache(cliURL, lru);
-  		sendPage(cliURL);
+  		sendPage(lru);
 		return;
 	}
 	
-	public void sendPage(String URL){
-		//retrieve the file and folder and send to client
+	public void sendPage(int index){
+		//retrieve the file and send to client
 	}
 	
-	private void updateCache(String URL, int index){
-		//Step ONE: pull page from the origin server
-		// --- Code goes here --- //
-		//Step TWO: add page to cache[] at index
-		cache[index]=new CacheData(URL);
+	private void updateCache(String cliURL, int index){
+		//Step ONE: add page to cache[] at index
+		cache[index]=new CacheData(cliURL);
+		
+		//Step TWO: pull page from the origin server
+		try {
+			URL webpage = new URL(cliURL);
+			BufferedReader reader = new BufferedReader( new InputStreamReader(webpage.openStream()) );
+			BufferedWriter writer = new BufferedWriter( new FileWriter(cache[index].getFilename()) );
+			String inputLine;
+	        while ((inputLine = reader.readLine()) != null){
+	        	writer.write(inputLine);
+	        }
+	        reader.close();
+	        writer.close();
+		} catch (MalformedURLException e) {
+			e.printStackTrace();
+			cache[index]=new CacheData();
+			return;
+		} catch (IOException e) {
+			e.printStackTrace();
+			cache[index]=new CacheData();
+			return;
+		}
 	}
 	
 	public float getHitRate(){
-		return numOfHits/numOfRequests;
+		return (float)numOfHits/numOfRequests;
 		//we need some way of sending this to the client after processing all input
-		//maybe store it in a file server-side instead?
+		//Maybe print server-side? maybe store it in a file server-side instead?
 	}
 	
 	public float getMissRate(){
 		return 1 - getHitRate();
 		//we need some way of sending this to the client after processing all input
-		//maybe store it in a file server-side instead?
+		//Maybe print server-side? Maybe store it in a file server-side instead?
 	}
 }
