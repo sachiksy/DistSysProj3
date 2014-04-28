@@ -1,6 +1,7 @@
 import java.net.*;
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.concurrent.Semaphore;
 
 //One cache, multiple clients
@@ -10,7 +11,7 @@ public class ProxyCache {
     static ServerSocket server;
     static Map<String, String> cache;
     static int maxDox;
-    double hit, miss;
+    static double hit, miss;
     
     //Initialize cache with <maximum documents> and serversocket with fixed port number
     public ProxyCache(int maxDocs) {
@@ -58,7 +59,7 @@ public class ProxyCache {
     public class ClientHandler extends Thread {
     	Socket client;
 		private final Semaphore sem = new Semaphore(1);
-		
+    	
     	//Constructor
     	public ClientHandler(Socket client) {
     		this.client = client;
@@ -83,14 +84,13 @@ public class ProxyCache {
     	
     	//Marching orders
     	public void run() {
+    		ReentrantReadWriteLock locker = new ReentrantReadWriteLock();
+    		
 			String userInput, localFile = null;
 			hit = 0;
 			miss = 0;
-			
 			try {
 				BufferedReader br = new BufferedReader(new InputStreamReader(client.getInputStream()));
-				
-				//Populate Cache, Download HTML files to make available locally
 				while((userInput = br.readLine()) != null) {
 					sem.acquire();
 					//Check Cache for local copy
@@ -98,6 +98,26 @@ public class ProxyCache {
 						//Access requested URL to reorder LinkedHashMap for LRU purposes
 						String temp = get(userInput);
 						hit += 1;
+						
+						//Send local copy to client
+						BufferedOutputStream bos = new BufferedOutputStream(client.getOutputStream());	//stream writes to client
+						File f = new File(temp);	//avoid FileNotFoundException
+						BufferedInputStream bis = new BufferedInputStream(new FileInputStream(f));	//stream reads from file
+						byte data[] = new byte[1024];
+						int read;
+
+						locker.readLock().lock();
+
+						//read file, send bytes to client
+
+						while((read = bis.read(data)) != -1) {
+							bos.write(data, 0, read);
+							bos.flush();
+						}
+						
+						locker.readLock().unlock();
+						
+						bis.close();
 						System.out.println("HIT: " + hit + "::" + temp);
 					}
 					//No local, get HTML page from Web Server
@@ -141,6 +161,26 @@ public class ProxyCache {
 						//Add to Cache
 						put(userInput, localFile);
 						miss += 1;
+	
+						//Send local copy to client
+						BufferedOutputStream bos = new BufferedOutputStream(client.getOutputStream());	//stream writes to client
+						File f = new File(localFile);	//avoid FileNotFoundException
+						BufferedInputStream bis = new BufferedInputStream(new FileInputStream(f));	//stream reads from file
+						byte data[] = new byte[1024];
+						int read;
+
+						locker.readLock().lock();
+
+						//read file, send bytes to client
+
+						while((read = bis.read(data)) != -1) {
+							bos.write(data, 0, read);
+							bos.flush();
+						}
+						
+						locker.readLock().unlock();
+						
+						bis.close();
 						System.out.println("MISS: " + miss + "::" + localFile);
 					}
 					sem.release();
@@ -163,10 +203,10 @@ public class ProxyCache {
 				}
 				
 				client.close();
-				
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+			} catch (IOException | InterruptedException e) {
+				System.out.println("ERROR: Cant read from client or InterruptionException!");
+				sem.release();
+				System.exit(0);
 			}
     	}
     }
