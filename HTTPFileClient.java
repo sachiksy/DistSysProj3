@@ -1,13 +1,13 @@
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.net.HttpURLConnection;
 import java.net.Socket;
-import java.net.URL;
 
 public class HTTPFileClient {
 	//Return nthIndexOf instead of the first indexOf
@@ -26,52 +26,39 @@ public class HTTPFileClient {
 			BufferedReader br = new BufferedReader(new FileReader(file.toString()));	//stream reads from file of URls
 			Socket sock;
 			PrintWriter output;
-			String line;
+			String url;
 			
-			int i = 0;
 			sock = new Socket("localhost", 5005);	//connect to ProxyCache
-			while((line = br.readLine()) != null) {	//read contents of file of URLs
-				if (line.trim().isEmpty()){
+			while((url = br.readLine()) != null) {	//read contents of file of URLs
+				if(url.trim().isEmpty()) {
 					continue;
 				}
+				
 				output = new PrintWriter(sock.getOutputStream());	//stream writes URL to ProxyCache
-				output.println(line);
+				output.println(url);
 				output.flush();
 				
-				//
-				URL url = new URL(line);
-				HttpURLConnection connection = (HttpURLConnection)url.openConnection();
-				int code = connection.getResponseCode();	//should be 200 for OK
-				if (HttpURLConnection.HTTP_OK == code) {
-					connection.connect();
-					InputStream is = connection.getInputStream();
-					int nthIndex = nthIndexOf(line, ':', 1);
-					line = line.substring(nthIndex + 1);
-					File fela = new File(line);
-					FileOutputStream fos = new FileOutputStream(fela);
-					
-					int j;
-					try {
-						while ((j = is.read()) != -1) {
-							fos.write(j);
-						}
-					} catch (IOException e) {
-						System.out.println("ERROR: Problems reading from Web Server");
-						System.exit(0);
-					}
+				//Receive HTML file
+				int nthIndex = nthIndexOf(url, ':', 1);
+				url = url.substring(nthIndex + 1);
 
-					try {
-						is.close();
-						fos.close();
-					} catch (IOException e) {
-						System.out.println("ERROR: Problems closing the streams used for getting Web Content.");
-						System.exit(0);
+				File f = new File(url);	//create new file to avoid FileNotFoundException with FileOutputStream
+				BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(f));	//stream writes to file
+				BufferedInputStream bis = new BufferedInputStream(sock.getInputStream());	//stream reads from ProxyCache
+				byte data[] = new byte[1024];
+				int read;
+				
+				while((read = bis.read(data)) != -1) {
+					bos.write(data, 0, read);
+					bos.flush();
+					if (read != 1024) {
+						break;
 					}
-				}	
+				}
+				
+				System.out.println(url + " received");
 			}
-			
-			System.out.println("Client is done!");
 			//((Closeable) file).close();	//"close" file
-			sock.close();				//close socket	
+			//sock.close();				//close socket	
 	}
 }
