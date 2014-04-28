@@ -1,6 +1,7 @@
 import java.net.*;
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 //One cache, multiple clients
 public class ProxyCache {
@@ -8,16 +9,16 @@ public class ProxyCache {
 	
     static ServerSocket server;
     static Map<String, String> cache;
-    static int maxDox;
+    static int maxDox, hit, miss;
     
     //Initialize cache with <maximum documents> and serversocket with fixed port number
     public ProxyCache(int maxDocs) {
     	this.maxDox = maxDocs;
     	//true = access order instead of insertion order
-    	this.cache = new LinkedHashMap<String, String>(this.maxDox, 0.75f, true) {	//(capacity, default load factor, ordering mode)
+    	this.cache = new LinkedHashMap<String, String>(this.maxDox + 1, 1.1f, true) {	//(capacity, default load factor, ordering mode)
     		protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
     			//When to remove eldest entry
-    			return size() > maxDox;		//Size exceeded the allowable max
+    			return this.size() > ProxyCache.this.maxDox;		//Size exceeded the allowable max
     		}
     	};
         try {
@@ -55,7 +56,6 @@ public class ProxyCache {
     //Lets do the heavy lifting
     public class ClientHandler extends Thread {
     	Socket client;
-		BufferedReader input;
 		
     	//Constructor
     	public ClientHandler(Socket client) {
@@ -81,116 +81,99 @@ public class ProxyCache {
     	
     	//Marching orders
     	public void run() {
-			try {
-				input = new BufferedReader(new InputStreamReader(client.getInputStream()));
-			} catch (IOException e) {
-				System.out.println("ERROR: Problems setting up ProxyCache input and output with client.");
-				System.exit(0);
-			}
-			
+    		ReentrantReadWriteLock locker = new ReentrantReadWriteLock();
+    		
 			String userInput, localFile = null;
-				try {
-					while((userInput = input.readLine()) != null) {
-						//Check Cache for local copy
-						if (cache.containsKey(userInput)) {
-							//Send local copy to client
-						}
-						//No local, get HTML page from Web Server
-						else {
-							System.out.println("ELSE");	//tk
-							//Get Document from Web Server
-							URL url = new URL(userInput);
-							System.out.println("URL: " + userInput);	//tk
-							HttpURLConnection connection = (HttpURLConnection)url.openConnection();
-							System.out.println("Connection OPEN");	//tk
-							int code = connection.getResponseCode();	//should be 200 for OK
-							System.out.println("Code: " + code);	//tk
-							if (HttpURLConnection.HTTP_OK == code) {
-								connection.connect();
-								System.out.println("Connected");	//tk
-								InputStream is = connection.getInputStream();
-								System.out.println("Input stream set up");	//tk
-								int nthIndex = nthIndexOf(userInput, ':', 1);
-								System.out.println("nthIndex: " + nthIndex);	//tk
-								localFile = userInput.substring(nthIndex + 1);
-								System.out.println("file name is: " + localFile);	//tk
-								FileOutputStream fos = new FileOutputStream(localFile);
-								System.out.println("FOS up and running");	//tk
-								
-								int j;
-								try {
-									while ((j = is.read()) != -1) {
-										fos.write(j);
-									}
-								} catch (IOException e) {
-									System.out.println("ERROR: Problems reading from Web Server");
-									System.exit(0);
-								}
-								System.out.println("Closing inputstream and FOS");	//tk
-								try {
-									is.close();
-									fos.close();
-								} catch (IOException e) {
-									System.out.println("ERROR: Problems closing the streams used for getting Web Content.");
-									System.exit(0);
-								}
-							}
-							System.out.println("Downloaded HTML page");	//tk
-							
-							//Add to Cache
-							System.out.println("Putting...");	//tk
-							put(userInput, localFile);
-							System.out.println("Caching: " + userInput + ", " + localFile);	//tk
-							
-							//Send local copy to client
-							File asdf = new File(localFile);
-							long fileSize = asdf.length();
-							System.out.println("Size of file: " + fileSize);	//tk
-							byte[] data = new byte[(int) fileSize];
-							FileInputStream fis = null;
-							try {
-								fis = new FileInputStream(asdf);
-							} catch (FileNotFoundException e) {
-								System.out.println("ERROR: File not found: FileInputStream(asdf)");
-								System.exit(0);
-							}
-							BufferedInputStream bis = new BufferedInputStream(fis);
-							BufferedOutputStream out = null;
-							try {
-								out = new BufferedOutputStream(client.getOutputStream());
-							} catch (IOException e) {
-								System.out.println("ERROR: Trouble with BufferedOutputStream(client.getOutputStream)");
-								System.exit(0);
-							}
-							int count;
-							
-							try {
-								while((count = bis.read(data)) > 0) {
-									System.out.println("Writing: " + count);	//tk
-									out.write(data, 0, count);
-								}
-							} catch (IOException e) {
-								System.out.println("ERROR: Problems sending to client.");
-								System.exit(0);
-							}
-							
-							System.out.println("Closing streams!");	//tk
-							
-							try {
-								out.flush();
-								out.close();
-								fis.close();
-								bis.close();
-							} catch (IOException e) {
-								System.out.println("ERROR: Problems flushing and closing various streams sending local copy");
-								System.exit(0);
-							}
-						}
+			hit = 0;
+			miss = 0;
+			System.out.println("hello");	//tk
+			try {
+				BufferedReader br = new BufferedReader(new InputStreamReader(client.getInputStream()));
+				System.out.println("my");	//tk
+				while((userInput = br.readLine()) != null) {
+					System.out.println("baby");	//tk
+					//Check Cache for local copy
+					if (cache.containsKey(userInput)) {
+						//Access requested URL to reorder LinkedHashMap for LRU purposes
+						String temp = get(userInput);
+						hit += 1;
+						System.out.println("HIT: " + hit);
+						
+						//Send local copy to client
+							//tk
 					}
-				} catch (IOException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
+					//No local, get HTML page from Web Server
+					else {
+						System.out.println("URL: " + userInput);	//tk
+						
+						//Get Document from Web Server
+						URL url = new URL(userInput);
+						HttpURLConnection connection = (HttpURLConnection)url.openConnection();
+						int code = connection.getResponseCode();	//should be 200 for OK
+						if (HttpURLConnection.HTTP_OK == code) {
+							connection.connect();
+							InputStream is = connection.getInputStream();
+							int nthIndex = nthIndexOf(userInput, ':', 1);
+							localFile = userInput.substring(nthIndex + 1);
+							FileOutputStream fos = new FileOutputStream(localFile);
+							
+							int j;
+							try {
+								while ((j = is.read()) != -1) {
+									fos.write(j);
+								}
+							} catch (IOException e) {
+								System.out.println("ERROR: Problems reading from Web Server");
+								System.exit(0);
+							}
+
+							try {
+								is.close();
+								fos.close();
+							} catch (IOException e) {
+								System.out.println("ERROR: Problems closing the streams used for getting Web Content.");
+								System.exit(0);
+							}
+						}		
+			
+						int nthIndex = nthIndexOf(userInput, ':', 1);
+						localFile = userInput.substring(nthIndex + 1);
+						
+						//Add to Cache
+						put(userInput, localFile);
+						miss += 1;
+						System.out.println("MISS: " + miss);
+//works up to here			
+						//Send local copy to client
+						System.out.println("f");	//tk
+						File f = new File(localFile);	//avoid FileNotFoundException
+						System.out.println("bis");	//tk
+						BufferedInputStream bis = new BufferedInputStream(new FileInputStream(f));	//stream reads from file
+						System.out.println("bos");	//tk
+						BufferedOutputStream bos = new BufferedOutputStream(client.getOutputStream());	//stream writes to client
+						byte data[] = new byte[1024];
+						int read;
+
+						System.out.println("Entering lock zone");	//tk
+						locker.readLock().lock();
+
+						//read file, send bytes to client
+						while((read = bis.read(data)) != -1) {
+							bos.write(data, 0, read);
+							bos.flush();
+						}
+						
+						System.out.println("Unlocking...");	//tk
+						locker.readLock().unlock();
+						
+						bis.close();
+						System.out.println(localFile + " sent");
+					}
 				}
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
     	}
     }
 }
