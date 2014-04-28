@@ -31,6 +31,9 @@ public class HTTPFileClient {
 			int i = 0;
 			sock = new Socket("localhost", 5005);	//connect to ProxyCache
 			while((line = br.readLine()) != null) {	//read contents of file of URLs
+				if (line.trim().isEmpty()){
+					continue;
+				}
 				output = new PrintWriter(sock.getOutputStream());	//stream writes URL to ProxyCache
 				output.println(line);
 				output.flush();
