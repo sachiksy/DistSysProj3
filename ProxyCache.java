@@ -1,7 +1,6 @@
 import java.net.*;
 import java.io.*;
 import java.util.*;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 //One cache, multiple clients
 public class ProxyCache {
@@ -9,7 +8,8 @@ public class ProxyCache {
 	
     static ServerSocket server;
     static Map<String, String> cache;
-    static int maxDox, hit, miss;
+    static int maxDox;
+    double hit, miss;
     
     //Initialize cache with <maximum documents> and serversocket with fixed port number
     public ProxyCache(int maxDocs) {
@@ -81,31 +81,24 @@ public class ProxyCache {
     	
     	//Marching orders
     	public void run() {
-    		ReentrantReadWriteLock locker = new ReentrantReadWriteLock();
-    		
 			String userInput, localFile = null;
 			hit = 0;
 			miss = 0;
-			System.out.println("hello");	//tk
+			
 			try {
 				BufferedReader br = new BufferedReader(new InputStreamReader(client.getInputStream()));
-				System.out.println("my");	//tk
+				
+				//Populate Cache, Download HTML files to make available locally
 				while((userInput = br.readLine()) != null) {
-					System.out.println("baby");	//tk
 					//Check Cache for local copy
 					if (cache.containsKey(userInput)) {
 						//Access requested URL to reorder LinkedHashMap for LRU purposes
 						String temp = get(userInput);
 						hit += 1;
-						System.out.println("HIT: " + hit);
-						
-						//Send local copy to client
-							//tk
+						System.out.println("HIT: " + hit + "::" + temp);
 					}
 					//No local, get HTML page from Web Server
 					else {
-						System.out.println("URL: " + userInput);	//tk
-						
 						//Get Document from Web Server
 						URL url = new URL(userInput);
 						HttpURLConnection connection = (HttpURLConnection)url.openConnection();
@@ -115,7 +108,8 @@ public class ProxyCache {
 							InputStream is = connection.getInputStream();
 							int nthIndex = nthIndexOf(userInput, ':', 1);
 							localFile = userInput.substring(nthIndex + 1);
-							FileOutputStream fos = new FileOutputStream(localFile);
+							File fela = new File(localFile);
+							FileOutputStream fos = new FileOutputStream(fela);
 							
 							int j;
 							try {
@@ -142,34 +136,28 @@ public class ProxyCache {
 						//Add to Cache
 						put(userInput, localFile);
 						miss += 1;
-						System.out.println("MISS: " + miss);
-//works up to here			
-						//Send local copy to client
-						System.out.println("f");	//tk
-						File f = new File(localFile);	//avoid FileNotFoundException
-						System.out.println("bis");	//tk
-						BufferedInputStream bis = new BufferedInputStream(new FileInputStream(f));	//stream reads from file
-						System.out.println("bos");	//tk
-						BufferedOutputStream bos = new BufferedOutputStream(client.getOutputStream());	//stream writes to client
-						byte data[] = new byte[1024];
-						int read;
-
-						System.out.println("Entering lock zone");	//tk
-						locker.readLock().lock();
-
-						//read file, send bytes to client
-						while((read = bis.read(data)) != -1) {
-							bos.write(data, 0, read);
-							bos.flush();
-						}
-						
-						System.out.println("Unlocking...");	//tk
-						locker.readLock().unlock();
-						
-						bis.close();
-						System.out.println(localFile + " sent");
+						System.out.println("MISS: " + miss + "::" + localFile);
 					}
 				}
+				
+				double hitRate = hit/(hit+miss);
+				double misRate = 1.00 - hitRate;
+				
+				System.out.println("Hit Rate: " + hitRate);
+				System.out.println("Miss Rate: " + misRate);
+				
+				//Print Contents of Cache to verify correctness
+				Set set = cache.entrySet();
+				Iterator i = set.iterator();
+				System.out.println("Contents of Cache to Verify Correctness(Least Recent => Most Recent [Vertical]): \n");
+				while(i.hasNext()) {
+					Map.Entry me = (Map.Entry)i.next();
+				//	System.out.print(me.getKey() + ": ");
+					System.out.println(me.getValue());
+				}
+				
+				client.close();
+				
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
