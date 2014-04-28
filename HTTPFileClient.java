@@ -1,13 +1,10 @@
+import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
-import java.io.Closeable;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 
@@ -21,55 +18,46 @@ public class HTTPFileClient {
 		return pos;
 	}
 	
-	public static void main (String[] args) {
+	public static void main (String[] args) throws IOException {
 		File file = new File(args[0]);
-		try {
-			BufferedReader reader = new BufferedReader(new FileReader(file.toString()));
+
+			BufferedReader br = new BufferedReader(new FileReader(file.toString()));	//stream reads from file of URls
 			Socket sock;
 			PrintWriter output;
-			InputStream is = null;
 			String url;
 			
 			int i = 0;
 			sock = new Socket("localhost", 5005);	//connect to ProxyCache
-			while((url = reader.readLine()) != null) {
-				output = new PrintWriter(sock.getOutputStream());
+			while((url = br.readLine()) != null) {	//read contents of file of URLs
+				output = new PrintWriter(sock.getOutputStream());	//stream writes URL to ProxyCache
 				output.print(url);
 				output.flush();
 				
-				is = sock.getInputStream();
 				//Receive HTML file
-				try {
-					//int buffer = sock.getReceiveBufferSize();
-					//System.out.println("Buffer is: " + buffer);	//tk
-					int nthIndex = nthIndexOf(url, ':', 1);
-					url = url.substring(nthIndex + 1);
-					System.out.println("File name: " + url);	//tk
-					FileOutputStream fos = new FileOutputStream(url);
-					BufferedOutputStream bos = new BufferedOutputStream(fos);
-					byte[] data = new byte[1024];
-					int count;
-					
-					System.out.println("Waiting/Blocked...");	//tk
-					while((count = is.read(data)) > 0) {
-						System.out.println("Reading: " + count);	//tk
-						bos.write(data, 0, count);
-					}
-					
+				int nthIndex = nthIndexOf(url, ':', 1);
+				url = url.substring(nthIndex + 1);
+//works up to here					
+				System.out.println("bis");	//tk
+				BufferedInputStream bis = new BufferedInputStream(sock.getInputStream());	//stream reads from ProxyCache
+				System.out.println("f");	//tk
+				File f = new File(url);	//create new file to avoid FileNotFoundException with FileOutputStream
+				System.out.println("bos");	//tk
+				BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(f));	//stream writes to file
+				byte data[] = new byte[1024];
+				int read;
+				
+				System.out.println("READING => WRITING");	//tk
+				while((read = bis.read(data)) != -1) {
+					System.out.println("birds: " + read);	//tk
+					bos.write(data, 0, read);
+					System.out.println("flying");	//tk
 					bos.flush();
-					bos.close();
-					is.close();
-					output.close();
-				} catch (FileNotFoundException e) {
-					//nothing b/c we are writing the file, so we are creating it or overwriting it so this should never trigger
+					System.out.println("high");	//tk
 				}
+				
+				System.out.println(url + " received");
 			}
 			//((Closeable) file).close();	//"close" file
-			//sock.close();				//close socket
-		} catch (FileNotFoundException e) {
-			System.out.println(file.toString() + " does not exist. more details: " + e);
-		} catch (IOException e) {
-			System.out.println("Failed to read a line from " + file.toString() + ". more details: " + e);
-		}
+			//sock.close();				//close socket	
 	}
 }
