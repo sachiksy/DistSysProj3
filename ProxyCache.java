@@ -1,6 +1,7 @@
 import java.net.*;
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.Semaphore;
 
 //One cache, multiple clients
 public class ProxyCache {
@@ -56,6 +57,7 @@ public class ProxyCache {
     //Lets do the heavy lifting
     public class ClientHandler extends Thread {
     	Socket client;
+		private final Semaphore sem = new Semaphore(1);
 		
     	//Constructor
     	public ClientHandler(Socket client) {
@@ -90,6 +92,7 @@ public class ProxyCache {
 				
 				//Populate Cache, Download HTML files to make available locally
 				while((userInput = br.readLine()) != null) {
+					sem.acquire();
 					//Check Cache for local copy
 					if (cache.containsKey(userInput)) {
 						//Access requested URL to reorder LinkedHashMap for LRU purposes
@@ -118,6 +121,7 @@ public class ProxyCache {
 								}
 							} catch (IOException e) {
 								System.out.println("ERROR: Problems reading from Web Server");
+								sem.release();
 								System.exit(0);
 							}
 
@@ -126,6 +130,7 @@ public class ProxyCache {
 								fos.close();
 							} catch (IOException e) {
 								System.out.println("ERROR: Problems closing the streams used for getting Web Content.");
+								sem.release();
 								System.exit(0);
 							}
 						}		
@@ -138,6 +143,7 @@ public class ProxyCache {
 						miss += 1;
 						System.out.println("MISS: " + miss + "::" + localFile);
 					}
+					sem.release();
 				}
 				
 				double hitRate = hit/(hit+miss);
