@@ -1,12 +1,13 @@
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintWriter;
+import java.net.HttpURLConnection;
 import java.net.Socket;
+import java.net.URL;
 
 public class HTTPFileClient {
 	//Return nthIndexOf instead of the first indexOf
@@ -18,46 +19,56 @@ public class HTTPFileClient {
 		return pos;
 	}
 	
+	@SuppressWarnings("resource")
 	public static void main (String[] args) throws IOException {
 		File file = new File(args[0]);
 
 			BufferedReader br = new BufferedReader(new FileReader(file.toString()));	//stream reads from file of URls
 			Socket sock;
 			PrintWriter output;
-			String url;
+			String line;
 			
 			int i = 0;
 			sock = new Socket("localhost", 5005);	//connect to ProxyCache
-			while((url = br.readLine()) != null) {	//read contents of file of URLs
+			while((line = br.readLine()) != null) {	//read contents of file of URLs
 				output = new PrintWriter(sock.getOutputStream());	//stream writes URL to ProxyCache
-				output.print(url);
+				output.println(line);
 				output.flush();
 				
-				//Receive HTML file
-				int nthIndex = nthIndexOf(url, ':', 1);
-				url = url.substring(nthIndex + 1);
-//works up to here					
-				System.out.println("bis");	//tk
-				BufferedInputStream bis = new BufferedInputStream(sock.getInputStream());	//stream reads from ProxyCache
-				System.out.println("f");	//tk
-				File f = new File(url);	//create new file to avoid FileNotFoundException with FileOutputStream
-				System.out.println("bos");	//tk
-				BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(f));	//stream writes to file
-				byte data[] = new byte[1024];
-				int read;
-				
-				System.out.println("READING => WRITING");	//tk
-				while((read = bis.read(data)) != -1) {
-					System.out.println("birds: " + read);	//tk
-					bos.write(data, 0, read);
-					System.out.println("flying");	//tk
-					bos.flush();
-					System.out.println("high");	//tk
-				}
-				
-				System.out.println(url + " received");
+				//
+				URL url = new URL(line);
+				HttpURLConnection connection = (HttpURLConnection)url.openConnection();
+				int code = connection.getResponseCode();	//should be 200 for OK
+				if (HttpURLConnection.HTTP_OK == code) {
+					connection.connect();
+					InputStream is = connection.getInputStream();
+					int nthIndex = nthIndexOf(line, ':', 1);
+					line = line.substring(nthIndex + 1);
+					File fela = new File(line);
+					FileOutputStream fos = new FileOutputStream(fela);
+					
+					int j;
+					try {
+						while ((j = is.read()) != -1) {
+							fos.write(j);
+						}
+					} catch (IOException e) {
+						System.out.println("ERROR: Problems reading from Web Server");
+						System.exit(0);
+					}
+
+					try {
+						is.close();
+						fos.close();
+					} catch (IOException e) {
+						System.out.println("ERROR: Problems closing the streams used for getting Web Content.");
+						System.exit(0);
+					}
+				}	
 			}
+			
+			System.out.println("Client is done!");
 			//((Closeable) file).close();	//"close" file
-			//sock.close();				//close socket	
+			sock.close();				//close socket	
 	}
 }
