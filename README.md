@@ -1,9 +1,19 @@
-DistSysProj3
-============
+I think we are supposed to do a performance study...do we turn that in with the readME?
 
-To Do:
+I did it by hand and checked with my program and I got the same numbers:
 
-1) Write Client, which reads URLs from input file, sends them (one at a time?) to server, and receives webpages
---Maybe client sends a message to the server after it's done?
-2) Fill in sendPage(), which should send the web page at index i (or lru) to the client
-3) Replace current run() with one that reads urls from client and calls getWebPage() for each one 
+MaxDocs: 2
+Hit Rate: 0
+Miss Rate: 1
+
+MaxDox: 5
+HR: 2/11 = 0.18181818181818181818...
+MR: 0.818181...
+
+MD: 7
+HR: 4/11 = .363636....
+MR: 7/11 = .636363....
+
+MD: 10 Same as MD: 7
+
+Go for the sending off, I will email you shortly
